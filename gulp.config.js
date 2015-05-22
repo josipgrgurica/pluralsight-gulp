@@ -14,8 +14,11 @@ module.exports = function () {
             './src/**/*.js',
             './*.js'
         ],
+        build: './build/', // ./dist/ ; ./prod/
         css: temp + 'styles.css',
         client: client,
+        fonts: './bower_components/font-awesome/fonts/**/*.*',
+        images: client + 'images/**/*.*',
         index: client + 'index.html',
         js: [
             clientApp + '**/*.module.js',
