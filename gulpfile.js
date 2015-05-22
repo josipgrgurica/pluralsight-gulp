@@ -1,5 +1,6 @@
 var gulp = require('gulp');
 var args = require('yargs').argv;
+var browserSync = require('browser-sync');
 var config = require('./gulp.config')();
 var del = require('del');
 var $ = require('gulp-load-plugins')({lazy: true});
@@ -75,9 +76,14 @@ gulp.task('serve-dev', ['inject'], function () {
         .on('restart', function (ev) {
             log('*** nodemon restarted ***');
             log('files changed on restart: \n' + ev);
+            setTimeout(function () {
+                browserSync.notify('reloading now ...');
+                browserSync.reload({stream: false});
+            }, config.browserReloadDelay);
         })
         .on('start', function (ev) {
             log('*** nodemon started ***');
+            startBrowserSync();
         })
         .on('crash', function () {
             log('*** nodemon crashed: script crashed for some reason ***');
@@ -88,6 +94,49 @@ gulp.task('serve-dev', ['inject'], function () {
 });
 
 ///////////////
+
+function changeEvent(event) {
+    var srcPattern = new RegExp('/.*(?=/' + config.source + ')/');
+    log('File ' + event.path.replace(srcPattern, '') + ' ' + event.type);
+}
+
+function startBrowserSync() {
+    if (args.nosync || browserSync.active) {
+        return;
+    }
+
+    log('Start browser-sync on port: ' + port);
+
+    gulp.watch([config.less], ['styles'])
+        .on('change', changeEvent);
+
+    var options = {
+        proxy: 'localhost:' + port,
+        port: 3000,
+        files: [
+            config.client + 'app/*.*',
+            config.client + 'test-helpers/*.*',
+            config.client + 'tests/*.*',
+            config.client + '*.html',
+            config.client + 'images/*.*',
+            config.temp + 'styles.css'
+        ],
+        ghostMode: {
+            clicks: true,
+            location: false,
+            forms: true,
+            scroll: true
+        },
+        injectChanges: true,
+        logFileChanges: true,
+        logLevel: 'debug',
+        logPrefix: 'gulp-patterns',
+        notify: true,
+        reloadDelay: 0
+    };
+
+    browserSync(options);
+}
 
 function clean(path, done) {
     log('Cleaning: ' + $.util.colors.blue(path));
