@@ -3,6 +3,7 @@ module.exports = function () {
     var clientApp = client + 'app/';
     var temp = './.tmp/';
     var server = './src/server/';
+    var root = './';
 
     var config = {
         /**
@@ -18,6 +19,7 @@ module.exports = function () {
         css: temp + 'styles.css',
         client: client,
         fonts: './bower_components/font-awesome/fonts/**/*.*',
+        html: clientApp + '**/*.html',
         htmltemplates: clientApp + '**/*.html',
         images: client + 'images/**/*.*',
         index: client + 'index.html',
@@ -27,7 +29,16 @@ module.exports = function () {
             '!' + clientApp + '**/*.spec.js'
         ],
         less: client + 'styles/styles.less',
+        root: root,
         server: server,
+
+        /**
+         * optimized files
+         */
+        optimized: {
+            app: 'app.js',
+            lib: 'lib.js'
+        },
 
         /**
          * template cache
@@ -54,6 +65,10 @@ module.exports = function () {
             directory: './bower_components',
             ignorePath: '../..'
         },
+        packages: [
+            './package.json',
+            './bower.json'
+        ],
 
         /**
          * Node settings

@@ -105,7 +105,7 @@ gulp.task('wiredep', function () {
         .pipe(gulp.dest(config.client));
 });
 
-gulp.task('inject', ['styles', 'wiredep'], function () {
+gulp.task('inject', ['wiredep', 'styles', 'templatecache'], function () {
     log('Wire up the app css into the html');
 
     return gulp
@@ -114,8 +114,81 @@ gulp.task('inject', ['styles', 'wiredep'], function () {
         .pipe(gulp.dest(config.client));
 });
 
+gulp.task('optimize', ['inject', 'fonts', 'images'], function () {
+    log('Optimizing the javascript, css, html');
+
+    var assets = $.useref.assets({searchPath: './'});
+    var templateCache = config.temp + config.templateCache.file;
+    var cssFilter = $.filter('**/*.css');
+    var jsLibFilter = $.filter('**/' + config.optimized.lib);
+    var jsAppFilter = $.filter('**/' + config.optimized.app);
+
+    return gulp
+        .src(config.index)
+        .pipe($.plumber())
+        .pipe($.inject(gulp.src(templateCache, {read: false}), {
+            starttag: '<!-- inject:templates:js -->'
+        }))
+        .pipe(assets)
+        .pipe(cssFilter)
+        .pipe($.csso())
+        .pipe(cssFilter.restore())
+        .pipe(jsLibFilter)
+        .pipe($.uglify())
+        .pipe(jsLibFilter.restore())
+        .pipe(jsAppFilter)
+        .pipe($.ngAnnotate())
+        .pipe($.uglify())
+        .pipe(jsAppFilter.restore())
+        .pipe($.rev())
+        .pipe(assets.restore())
+        .pipe($.useref())
+        .pipe($.revReplace())
+        .pipe(gulp.dest(config.build))
+        .pipe($.rev.manifest())
+        .pipe(gulp.dest(config.build));
+});
+
+/**
+ * Bump the version
+ * --type=pre will bump the prerelease version *.*.*-x
+ * --type=patch or no flag will bump the patch version *.*.x
+ * --type=minor will bump the minor version *.x.*
+ * --type=mayor will bump the major version x.*.*
+ * --type=1.2.3. will bump to a specific version and ignore other flags
+ */
+gulp.task('bump', function () {
+    var msg = 'Bumping versions';
+    var type = args.type;
+    var version = args.version;
+    var options = {};
+    if (version) {
+        options.version = version;
+        msg += ' to ' + version;
+    } else {
+        options.type = type;
+        msg += ' for a ' + type;
+    }
+    log(msg);
+
+    return gulp
+        .src(config.packages)
+        .pipe($.print())
+        .pipe($.bump(options))
+        .pipe(gulp.dest(config.root));
+});
+
+gulp.task('serve-build', ['optimize'], function () {
+    serve(false);
+});
+
 gulp.task('serve-dev', ['inject'], function () {
-    var isDev = true;
+    serve(true);
+});
+
+///////////////
+
+function serve(isDev) {
     var nodeOptions = {
         script: config.nodeServer,
         delayTime: 1,
@@ -136,7 +209,7 @@ gulp.task('serve-dev', ['inject'], function () {
         })
         .on('start', function (ev) {
             log('*** nodemon started ***');
-            startBrowserSync();
+            startBrowserSync(isDev);
         })
         .on('crash', function () {
             log('*** nodemon crashed: script crashed for some reason ***');
@@ -144,36 +217,39 @@ gulp.task('serve-dev', ['inject'], function () {
         .on('exit', function () {
             log('*** nodemon exited cleanly ***');
         });
-});
-
-///////////////
+}
 
 function changeEvent(event) {
     var srcPattern = new RegExp('/.*(?=/' + config.source + ')/');
     log('File ' + event.path.replace(srcPattern, '') + ' ' + event.type);
 }
 
-function startBrowserSync() {
+function startBrowserSync(isDev) {
     if (args.nosync || browserSync.active) {
         return;
     }
 
     log('Start browser-sync on port: ' + port);
 
-    gulp.watch([config.less], ['styles'])
-        .on('change', changeEvent);
+    if (isDev) {
+        gulp.watch([config.less], ['styles'])
+            .on('change', changeEvent);
+    } else {
+        gulp.watch([config.less, config.js, config.html], ['optimize', browserSync.reload])
+            .on('change', changeEvent);
+    }
 
     var options = {
         proxy: 'localhost:' + port,
         port: 3000,
-        files: [
-            config.client + 'app/*.*',
+        files: isDev ? [
+            config.client + 'app/**/*.*',
             config.client + 'test-helpers/*.*',
             config.client + 'tests/*.*',
             config.client + '*.html',
             config.client + 'images/*.*',
             config.temp + 'styles.css'
-        ],
+        ] : [],
         ghostMode: {
             clicks: true,
             location: false,
