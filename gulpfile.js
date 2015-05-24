@@ -3,6 +3,8 @@ var args = require('yargs').argv;
 var browserSync = require('browser-sync');
 var config = require('./gulp.config')();
 var del = require('del');
+var path = require('path');
+var _ = require('lodash');
 var $ = require('gulp-load-plugins')({lazy: true});
 var port = process.env.PORT || config.defaultPort;
 
@@ -114,7 +116,20 @@ gulp.task('inject', ['wiredep', 'styles', 'templatecache'], function () {
         .pipe(gulp.dest(config.client));
 });
 
-gulp.task('optimize', ['inject', 'fonts', 'images'], function () {
+gulp.task('build', ['optimize', 'images', 'fonts'], function () {
+    log('Building everything');
+
+    var msg = {
+        title: 'gulp build',
+        subtitles: 'Deployed to the build folder',
+        message: 'Running `gulp serve-build`'
+    };
+    del(config.temp);
+    log(msg);
+    notify(msg);
+});
+
+gulp.task('optimize', ['inject', 'test'], function () {
     log('Optimizing the javascript, css, html');
 
     var assets = $.useref.assets({searchPath: './'});
@@ -178,7 +193,7 @@ gulp.task('bump', function () {
         .pipe(gulp.dest(config.root));
 });
 
-gulp.task('serve-build', ['optimize'], function () {
+gulp.task('serve-build', ['build'], function () {
     serve(false);
 });
 
@@ -186,7 +201,38 @@ gulp.task('serve-dev', ['inject'], function () {
     serve(true);
 });
 
+gulp.task('test', ['vet', 'templatecache'], function (done) {
+    startTests(true /* singleRun */, done);
+});
+
+gulp.task('autotest', ['vet', 'templatecache'], function (done) {
+    startTests(false /* singleRun */, done);
+});
 ///////////////
+
+function startTests(singleRun, done) {
+    var karma = require('karma').server;
+    var excludeFiles = [];
+    var serverSpecs = config.serverIntegrationSpecs;
+
+    excludeFiles = serverSpecs;
+
+    karma.start({
+        configFile: __dirname + '/karma.conf.js',
+        exclude: excludeFiles,
+        singleRun: !!singleRun // make sure that it is boolean
+
+    }, karmaCompleted);
+
+    function karmaCompleted(karmaResult) {
+        log('Karma completed');
+        if (karmaResult) {
+            done('karma: tests failed with code ' + karmaResult);
+        } else {
+            done();
+        }
+    }
+}
 
 function serve(isDev) {
     var nodeOptions = {
@@ -222,6 +268,17 @@ function serve(isDev) {
 function changeEvent(event) {
     var srcPattern = new RegExp('/.*(?=/' + config.source + ')/');
     log('File ' + event.path.replace(srcPattern, '') + ' ' + event.type);
+}
+
+function notify(options) {
+    var notifier = require('node-notifier');
+    var notifyOptions = {
+        sound: 'Bottle',
+        contentImage: path.join(__dirname, 'gulp.png'),
+        icon: path.join(__dirname, 'gulp.png')
+    };
+    _.assign(notifyOptions, options);
+    notifier.notify(notifyOptions);
 }
 
 function startBrowserSync(isDev) {
